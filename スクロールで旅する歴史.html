@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-Hist Museum | Scroll Story</title>
+    <meta name="description" content="スクロールで旅する、手のひらの上の歴史博物館。失われた風景を、AIと共に追体験する場所。">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <style>
+        /* General Body Styles */
+        body {
+            background-color: #000;
+            color: #f0f0f0;
+            font-family: 'Noto Sans JP', sans-serif;
+            cursor: none; /* デフォルトカーソルを非表示に */
+        }
+
+        /* Typography */
+        h1, h2, h3, .timeline-era, .theme-title, .header-title {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* Hero Title Style */
+        .hero-title {
+            text-shadow: 0 0 15px rgba(0,0,0,0.5), 0 0 30px rgba(0,0,0,0.5);
+        }
+
+        /* Particle Canvas Style */
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        /* カスタムカーソル */
+        #cursor-dot {
+            width: 8px;
+            height: 8px;
+            background-color: rgba(255,255,255,0.8);
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+        }
+
+
+        /* Parallax Container */
+        .parallax-section {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            z-index: 2;
+            background-color: #1a1a1a;
+        }
+
+        /* Parallax Background Image */
+        .parallax-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 120%;
+            background-size: cover;
+            background-position: center;
+            z-index: -1;
+        }
+
+        /* Content Box inside Parallax */
+        .content-box {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 600px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            z-index: 3;
+        }
+        
+        /* Visibility Animation Trigger */
+        .is-visible .content-box,
+        .is-visible .catchphrase {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Timeline Styles */
+        #timeline {
+            position: fixed;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 80vh;
+            width: 60px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            pointer-events: none;
+        }
+        #timeline.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+        #timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 0;
+            height: 100%;
+            width: 2px;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .timeline-marker {
+            position: relative;
+            width: 12px;
+            height: 12px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+            cursor: pointer;
+        }
+        .timeline-marker.active {
+            background-color: #FBBF24;
+            transform: scale(1.5);
+        }
+        .timeline-era {
+            position: absolute;
+            left: 25px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8rem;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .timeline-marker:hover .timeline-era,
+        .timeline-marker.active .timeline-era {
+            opacity: 1;
+            color: white;
+        }
+        
+        /* Intermission Section Styles */
+        .intermission-section {
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+            background: transparent;
+        }
+        .catchphrase {
+            font-family: 'Cinzel', serif;
+            font-size: 2rem;
+            max-width: 700px;
+            text-align: center;
+            line-height: 1.5;
+            opacity: 0;
+            transform: translateY(40px);
+            transition: transform 0.8s ease-out, opacity 0.8s ease-out;
+            text-shadow: 0 0 15px rgba(0,0,0,0.8);
+        }
+        
+        /* Theme Selector Styles */
+        #theme-selector-section {
+            position: sticky;
+            top: 88px;
+            z-index: 40;
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: all 0.4s ease-in-out;
+        }
+        
+        #theme-options-container {
+            width: 100%;
+            overflow: hidden;
+            padding: 1rem 0;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, padding 0.5s ease-in-out;
+        }
+       
+        @keyframes infinite-scroll {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+
+        #theme-options {
+            display: flex;
+            gap: 2rem;
+            padding: 0 1rem;
+            width: fit-content;
+            animation: infinite-scroll 80s linear infinite;
+        }
+        #theme-options-container:hover #theme-options {
+            animation-play-state: paused;
+        }
+
+        .theme-option {
+            flex-shrink: 0;
+            width: 250px;
+            height: 380px;
+            border-radius: 1rem;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .theme-option:hover {
+            transform: scale(1.05);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.7);
+        }
+        .theme-option::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 1rem;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 50%);
+        }
+        .theme-title {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 1.5rem;
+            color: white;
+            font-size: 1.8rem;
+            z-index: 1;
+        }
+
+        #theme-selector-header {
+            padding: 0.75rem 5vw;
+            cursor: pointer;
+        }
+        #theme-toggle-icon {
+            transition: transform 0.3s ease;
+        }
+        
+        #theme-selector-section.is-collapsed {
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        #theme-selector-section.is-collapsed #theme-options-container {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            opacity: 0;
+            overflow: hidden;
+        }
+        #theme-selector-section.is-collapsed #theme-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            #timeline { display: none; }
+            .theme-option { width: 200px; height: 320px; }
+            #theme-options { gap: 1rem; }
+            #theme-selector-section { top: 72px; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particle-canvas"></canvas>
+    <div id="cursor-dot"></div>
+
+    <header class="fixed top-0 left-0 w-full z-50 py-4 px-6 md:px-12 transition-all duration-300 bg-black/30 backdrop-blur-md h-[88px] md:h-auto">
+        <div class="container mx-auto flex justify-between items-center">
+            <a href="#" class="header-title text-xl md:text-2xl font-bold tracking-wider">
+                <i class="fa-solid fa-landmark mr-2"></i>Mini-Hist Museum
+            </a>
+            <nav>
+                <a href="https://kaname-smith.github.io/Mini_Hist_Museum/" target="_blank" class="text-lg hover:opacity-75 transition-opacity">ギャラリーへ</a>
+            </nav>
+        </div>
+    </header>
+
+    <div id="timeline"></div>
+
+    <main>
+        <section class="parallax-section hero-section">
+            <div class="parallax-bg" style="background-image: url('https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(52).jpg?raw=true');"></div>
+            <div class="content-box">
+                <h1 class="hero-title text-5xl md:text-7xl font-bold mb-4">A Journey Through Time</h1>
+                <p class="text-lg">スクロールで旅する、手のひらの上の歴史博物館</p>
+            </div>
+        </section>
+
+        <section id="theme-selector-section">
+            <div id="theme-selector-header" class="flex justify-between items-center">
+                <h3 id="current-theme-title" class="text-xl font-bold text-gray-300">Choose Your Journey</h3>
+                <button id="theme-toggle-button" aria-label="テーマ選択を開閉する">
+                    <i id="theme-toggle-icon" class="fa-solid fa-chevron-down text-xl text-gray-300"></i>
+                </button>
+            </div>
+            <div id="theme-options-container">
+                <div id="theme-options">
+                    </div>
+            </div>
+        </section>
+
+        <div id="story-content"></div>
+    </main>
+    
+    <footer class="text-center py-8 border-t border-gray-700 hidden">
+        <p>© 2025 Mini-Hist Museum. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const themes = {
+            architecture: {
+                title: "建築の歴史",
+                coverImage: "https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(14).jpg?raw=true",
+                catchphrases: [ "石は語る、文明の記憶を。", "天に届く祈り、石に刻まれた祈願。", "都市は生きている、過去と未来の交差点。", "様式は時代を映す鏡である。" ],
+                exhibits: [
+                    { id: 3, era: '古代', year: -2589, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(14).jpg?raw=true', ja: { title: "ギザの三大ピラミッドとスフィンクスの建設", description: "ピラミッドを築いたのは奴隷ではなく、誇りをもって働いた人々。信仰と誇りを胸に築いた「天への階段」でした。" } },
+                    { id: 6, era: '古代', year: -447, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(21).jpg?raw=true', ja: { title: "パルテノン神殿の建設", description: "信仰と技術、市民の誇りが融合した建築は、今も世界中の人々を魅了しています。その柱には未来へのメッセージが刻まれていました。" } },
+                    { id: 22, era: '中世', year: 1163, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/%E3%83%8E%E3%83%BC%E3%83%88%E3%83%AB%E3%83%80%E3%83%A0.jpg?raw=true', ja: { title: "ノートルダム大聖堂の建設", description: "空に届くような大聖堂は、何世代もの職人たちの手で築かれました。未来の世代に残すために石を積み続けた人々の祈りがここにあります。" } },
+                    { id: 25, era: 'ルネサンス', year: 1450, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/%E3%83%9E%E3%83%81%E3%83%A5%E3%83%94%E3%83%81%E3%83%A5.jpg?raw=true', ja: { title: "マチュピチュ山頂のインカ帝国", description: "雲の上に都市を築いた文明。自然と調和して生きる知恵は、現代に「便利さだけでなく、自然と共にどう生きるか」を問いかけます。" } },
+                ]
+            },
+            exploration: {
+                title: "探検と冒険の歴史",
+                coverImage: "https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(53).jpg?raw=true",
+                catchphrases: [ "未知なる海へ、羅針盤が指し示した夢。", "地図の空白を埋めたのは、一歩踏み出す勇気だった。", "世界の果てに、新たな世界が広がっていた。", "旅人の足跡が、文化の道となる。" ],
+                exhibits: [
+                    { id: 16, era: '中世', year: 800, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(53).jpg?raw=true', ja: { title: "ヴァイキングのロングシップ", description: "霧の向こうに現れる、海を制した戦士たち。彼らの冒険心と未知への挑戦心は、ヨーロッパの歴史を大きく動かしました。" } },
+                    { id: 19, era: '中世', year: 1271, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/%E3%83%9E%E3%83%AB%E3%82%B3%E3%83%9D%E3%83%BC%E3%83%AD.jpg?raw=true', ja: { title: "マルコ・ポーロ、シルクロードの旅", description: "砂漠を越え、オアシスをつなぎ、東方の都へ。未知の文化を結ぶ彼の旅は、世界の見方を変えました。" } },
+                ]
+            },
+            philosophy: {
+                title: "思想と哲学の歴史",
+                coverImage: "https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(18).jpg?raw=true",
+                catchphrases: [ "問い続けることが、人間を人間たらしめる。", "広場での対話が、民主主義の礎を築いた。", "書物に記された知性が、暗黒の時代を照らす。", "一つの思想が、世界を根底から揺り動かす。" ],
+                exhibits: [
+                    { id: 5, era: '古代', year: -400, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(18).jpg?raw=true', ja: { title: "古代ギリシャ、アテネのアゴラ", description: "もし街角の雑踏こそが最高の学び舎だったとしたら？――市場で市民と語り合うソクラテスは「考える勇気」の大切さを後世に伝えています。" } },
+                    { id: 10, era: '古代', year: 100, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(33).jpg?raw=true', ja: { title: "古代ローマのフォロ・ロマーノ", description: "元老院議員たちが議論を交わすローマの中心地。議論の背後にある野心や信念、市民の目線に立った政治のリアルさがここにあります。" } },
+                    { id: 15, era: '古代', year: -288, imageUrl: 'https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(49).jpg?raw=true', ja: { title: "アレクサンドリアの大図書館", description: "すべての知識が一つの場所に集まったら？失われた知の集積は、人類に「学び続けることの価値」を問いかけています。" } },
+                ]
+            },
+            war: {
+                title: "戦争と平和の歴史",
+                coverImage: "https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(30).jpg?raw=true",
+                catchphrases: [], exhibits: []
+            },
+            art: {
+                title: "芸術と文化の歴史",
+                coverImage: "https://github.com/kaname-smith/museum_galary/blob/main/Image_fx%20(56).jpg?raw=true",
+                catchphrases: [], exhibits: []
+            },
+             science: {
+                title: "科学と発見の歴史",
+                coverImage: "https://images.unsplash.com/photo-1532187863486-abf9db5a90e3?q=80&w=2070&auto=format&fit=crop",
+                catchphrases: [], exhibits: []
+            }
+        };
+        
+        const themeOptionsWrapper = document.getElementById('theme-options');
+        const storyContent = document.getElementById('story-content');
+        const timelineContainer = document.getElementById('timeline');
+        const footer = document.querySelector('footer');
+        const themeSelectorSection = document.getElementById('theme-selector-section');
+        const themeSelectorHeader = document.getElementById('theme-selector-header');
+        const currentThemeTitle = document.getElementById('current-theme-title');
+        const themeToggleIcon = document.getElementById('theme-toggle-icon');
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        const cursorDot = document.getElementById('cursor-dot');
+
+        // ★★★ Particle Animation Start (Improved) ★★★
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        let particles = [];
+        const mouse = { x: undefined, y: undefined, radius: 240 };
+        
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+            cursorDot.style.left = e.x + 'px';
+            cursorDot.style.top = e.y + 'px';
+        });
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initParticles();
+        });
+        window.addEventListener('mouseout', () => {
+            mouse.x = undefined;
+            mouse.y = undefined;
+        });
+
+        // ★ 変更点: クリック時の放出エフェクトを実装
+        window.addEventListener('click', (e) => {
+            for (const particle of particles) {
+                let dx = e.x - particle.x;
+                let dy = e.y - particle.y;
+                let distance = Math.sqrt(dx*dx + dy*dy);
+                // クリックの影響範囲
+                if (distance < 150) { 
+                    // 粒子をクリック地点から遠ざける方向の速度を与える
+                    particle.vx = -dx * 0.15;
+                    particle.vy = -dy * 0.15;
+                }
+            }
+        });
+
+        class Particle {
+            constructor(x, y, size, color) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.color = color;
+                this.baseX = x;
+                this.baseY = y;
+                // ★ 変更点: 動きを滑らかにするため、速度(vx, vy)を初期化
+                this.vx = 0;
+                this.vy = 0;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
+                ctx.closePath();
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+            update() {
+                // 1. 元の位置に戻ろうとする力（常に働く）
+                // これにより、カーソルから離れた粒子が自然に元の場所へ帰っていきます。
+                this.vx += (this.baseX - this.x) * 0.005;
+                this.vy += (this.baseY - this.y) * 0.005;
+
+                // 2. 生命感のある「揺らぎ」の力
+                // 以前よりずっと小さい値を「速度」に加えることで、滑らかに漂う動きになります。
+                this.vx += (Math.random() - 0.5) * 0.1;
+                this.vy += (Math.random() - 0.5) * 0.1;
+
+                // 3. カーソルへの吸引力
+                let dx = mouse.x - this.x;
+                let dy = mouse.y - this.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < mouse.radius) {
+                    const force = (mouse.radius - distance) / mouse.radius;
+                    // 位置を直接変えるのではなく、「速度」に吸引力を加えます。
+                    this.vx += (dx / distance) * force * 0.5;
+                    this.vy += (dy / distance) * force * 0.5;
+                }
+
+                // 4. 全ての力に摩擦をかけて、動きを減衰させる
+                // これがないと粒子が無限に加速してしまいます。
+                this.vx *= 0.9;
+                this.vy *= 0.9;
+                
+                // 5. クリック時の速度を適用 (クリック処理は変更不要)
+                // this.x += this.vx; の行と重複するため、ここでは速度を加算するだけ
+                
+                // 6. 最終的な速度を位置に反映
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+        }
+        
+        function initParticles() {
+            particles = [];
+            // ★ 変更点: 粒子の密度を向上させる (数値を小さくする)
+            let numberOfParticles = (canvas.width * canvas.height) / 500;
+            for (let i = 0; i < numberOfParticles; i++) {
+                let size = (Math.random() * 1.5) + 0.5;
+                let x = (Math.random() * (innerWidth - size * 2)) + size;
+                let y = (Math.random() * (innerHeight - size * 2)) + size;
+                let color = `rgba(255, 255, 255, ${Math.random() * 0.6 + 0.1})`; 
+                particles.push(new Particle(x, y, size, color));
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, innerWidth, innerHeight);
+            for (const particle of particles) {
+                particle.update();
+                particle.draw();
+            }
+            requestAnimationFrame(animateParticles);
+        }
+        initParticles();
+        animateParticles();
+        // ★★★ Particle Animation End ★★★
+
+
+        let currentScrollListener = null;
+        let isThemeSelected = false;
+
+        function populateThemeOptions() {
+            themeOptionsWrapper.innerHTML = '';
+            for (const themeKey in themes) {
+                const theme = themes[themeKey];
+                const option = document.createElement('div');
+                option.className = 'theme-option';
+                option.style.backgroundImage = `url('${theme.coverImage}')`;
+                option.dataset.theme = themeKey;
+                option.innerHTML = `<h3 class="theme-title">${theme.title}</h3>`;
+                option.addEventListener('click', () => selectTheme(themeKey));
+                themeOptionsWrapper.appendChild(option);
+            }
+        }
+        populateThemeOptions();
+        
+        function setupInfiniteScroll() {
+            const options = themeOptionsWrapper.querySelectorAll('.theme-option');
+            options.forEach(option => {
+                const clone = option.cloneNode(true);
+                clone.addEventListener('click', () => selectTheme(clone.dataset.theme));
+                themeOptionsWrapper.appendChild(clone);
+            });
+        }
+        setupInfiniteScroll();
+
+
+        themeSelectorHeader.addEventListener('click', () => {
+            if (!isThemeSelected) return;
+            const isCollapsed = themeSelectorSection.classList.toggle('is-collapsed');
+            themeToggleIcon.classList.toggle('fa-chevron-down', !isCollapsed);
+            themeToggleIcon.classList.toggle('fa-chevron-up', isCollapsed);
+        });
+
+        function selectTheme(themeKey) {
+            const selectedTheme = themes[themeKey];
+            
+            if (!isThemeSelected) {
+                isThemeSelected = true;
+                footer.classList.remove('hidden');
+                timelineContainer.classList.add('visible');
+            }
+            
+            if (selectedTheme.exhibits.length === 0) {
+                alert("このテーマのコンテンツは現在準備中です。");
+                return;
+            }
+
+            generateStoryContent(selectedTheme);
+            
+            currentThemeTitle.textContent = `現在のテーマ: ${selectedTheme.title}`;
+            themeSelectorSection.classList.add('is-collapsed');
+            themeToggleIcon.classList.remove('fa-chevron-down');
+            themeToggleIcon.classList.add('fa-chevron-up');
+
+            const firstContentElement = storyContent.querySelector('section');
+            if(firstContentElement) {
+                 setTimeout(() => {
+                    firstContentElement.scrollIntoView({ behavior: 'smooth' });
+                 }, 100);
+            }
+
+            initializeScrollEffects();
+        }
+
+        function generateStoryContent(theme) {
+            storyContent.innerHTML = '';
+            timelineContainer.innerHTML = '';
+            
+            const sortedExhibits = theme.exhibits.sort((a, b) => a.year - b.year);
+            sortedExhibits.forEach((item, index) => {
+                if (index === 0) {
+                    const firstIntermission = document.createElement('section');
+                    firstIntermission.className = 'intermission-section';
+                    firstIntermission.innerHTML = `<h3 class="catchphrase">${theme.catchphrases[0]}</h3>`;
+                    storyContent.appendChild(firstIntermission);
+                }
+                const section = document.createElement('section');
+                section.className = 'parallax-section';
+                section.dataset.era = item.era;
+                section.dataset.year = item.year;
+                section.innerHTML = `
+                    <div class="parallax-bg" style="background-image: url('${item.imageUrl}');"></div>
+                    <div class="content-box">
+                        <h2 class="text-3xl md:text-4xl font-bold mb-4">${item.ja.title}</h2>
+                        <p>${item.ja.description}</p>
+                    </div>
+                `;
+                storyContent.appendChild(section);
+                if (index < sortedExhibits.length - 1) {
+                    const intermission = document.createElement('section');
+                    intermission.className = 'intermission-section';
+                    intermission.innerHTML = `<h3 class="catchphrase">${theme.catchphrases[(index + 1) % theme.catchphrases.length]}</h3>`;
+                    storyContent.appendChild(intermission);
+                }
+                const marker = document.createElement('div');
+                marker.className = 'timeline-marker';
+                marker.dataset.targetYear = item.year;
+                marker.innerHTML = `<span class="timeline-era">${item.era} (${item.year > 0 ? 'AD' : 'BC'} ${Math.abs(item.year)})</span>`;
+                marker.addEventListener('click', () => {
+                    section.scrollIntoView({ behavior: 'smooth' });
+                });
+                timelineContainer.appendChild(marker);
+            });
+        }
+        
+        function initializeScrollEffects() {
+            if (currentScrollListener) {
+                window.removeEventListener('scroll', currentScrollListener);
+            }
+
+            const allSections = document.querySelectorAll('#story-content section');
+            const parallaxBgs = document.querySelectorAll('#story-content .parallax-bg');
+            const timelineMarkers = document.querySelectorAll('#timeline .timeline-marker');
+
+            function updateParallaxAndTimeline() {
+                const scrollY = window.scrollY;
+                let activeYear = null;
+                
+                const parallaxSections = document.querySelectorAll('#story-content .parallax-section');
+
+                parallaxSections.forEach((section) => {
+                    const sectionTop = section.offsetTop;
+                    const sectionHeight = section.offsetHeight;
+                    
+                    if (scrollY + window.innerHeight * 0.5 > sectionTop && scrollY < sectionTop + sectionHeight - window.innerHeight * 0.5) {
+                        const bg = section.querySelector('.parallax-bg');
+                         if(bg){
+                            const speed = 0.3;
+                            const offset = (scrollY - sectionTop + window.innerHeight / 2) * speed - (sectionHeight / 2 * speed) ;
+                            bg.style.transform = `translateY(${offset}px)`;
+                         }
+                        activeYear = section.dataset.year;
+                    }
+                });
+                
+                timelineMarkers.forEach(marker => {
+                    if (marker.dataset.targetYear === activeYear) {
+                        marker.classList.add('active');
+                    } else {
+                        marker.classList.remove('active');
+                    }
+                });
+            }
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                    }
+                });
+            }, { threshold: 0.2 });
+
+            allSections.forEach(section => {
+                observer.observe(section);
+            });
+            
+            currentScrollListener = () => window.requestAnimationFrame(updateParallaxAndTimeline);
+            window.addEventListener('scroll', currentScrollListener);
+
+            updateParallaxAndTimeline();
+        }
+    });
+    </script>
+
+</body>
+</html>
